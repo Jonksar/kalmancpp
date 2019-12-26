@@ -2,13 +2,20 @@
  * --------------------------------------------------
  * File Name : UnscentedKalmanFilter.hpp
  * Creation Date : 2019-10-26 Sat 06:40 am
- * Last Modified : 2019-11-02 Sat 07:32 pm
+ * Last Modified : 2019-12-26 Thu 08:37 pm
  * Created By : Joonatan Samuel
  * --------------------------------------------------
  */
 
 #include <eigen3/Eigen/Cholesky>
-
+/**
+ * Generates sigma points and weights according to Van der Merwe’s 2004 dissertation[1] for the UnscentedKalmanFilter class.
+ * It parametizes the sigma points using alpha, beta, kappa terms, and is the version seen in most publications.
+ * Unless you know better, this should be your default choice
+ *
+ * @tparam T numeric type, usually double or float
+ * @tparam n number of dimensions sigma points are sampled from
+ */
 template <class T, int n>
 class MerweScaledSigmaPoints {
     public:
@@ -22,7 +29,13 @@ class MerweScaledSigmaPoints {
         T Wc[2*n+1];
         T Wm[2*n+1];
         state_matrix_size_t sigma_points_array[2*n+1];
-
+        /**
+         * Initialization function that by that will compute weights for sigma points
+         *
+         * @param[in] alpha [T numeric] Determins the spread of the sigma points around the mean. Usually a small positive value (1e-3) according to [3].
+         * @param[in] beta  [T numeric] Incorporates prior knowledge of the distribution of the mean. For Gaussian x beta=2 is optimal, according to [3].
+         * @param[in] kappa [T numeric, default=0.0] Secondary scaling parameter usually set to 0 according to [4], or to 3-n according to [5].
+         */
         MerweScaledSigmaPoints(T alpha=0.01, T beta=2, T kappa=0) : alpha(alpha), beta(beta), kappa(kappa) {
             compute_weights();
         };
@@ -30,7 +43,8 @@ class MerweScaledSigmaPoints {
         ~MerweScaledSigmaPoints() {
         };
 
-        // Computes the weights for the scaled unscented Kalman filter.
+        /** Computes the weights for the scaled unscented Kalman filter.
+         */
         void compute_weights() {
             T lambda_ = std::pow(alpha, 2) * (T(n)+kappa) - T(n);
 
@@ -48,11 +62,18 @@ class MerweScaledSigmaPoints {
             return;
         };
 
-        size_t num_sigmas( )
+        inline size_t num_sigmas( )
         {
             return 2*n + 1;
         };
 
+        /** Main compute function of the class. Given a vector and covariance, generate 2*n + 1 sigma points.
+         *
+         * @param[in] x input state vector
+         * @param[in] P covariance of x
+         *
+         * @return the sigma points
+         */
         state_matrix_size_t* sigma_points(const state_matrix_size_t& x, const state_square_size_t& P)
         {
             T lambda_ = std::pow(this->alpha, 2) * (n + this->kappa) - n;
