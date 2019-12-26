@@ -2,7 +2,7 @@
  * --------------------------------------------------
  * File Name : UnscentedKalmanFilter.hpp
  * Creation Date : 2019-10-26 Sat 06:40 am
- * Last Modified : 2019-12-26 Thu 08:51 pm
+ * Last Modified : 2019-12-26 Thu 08:59 pm
  * Created By : Joonatan Samuel
  * --------------------------------------------------
  */
@@ -112,8 +112,8 @@ std::ostream & operator << (std::ostream &out, const MerweScaledSigmaPoints<T, n
 
 
 /**
- * Implements the Scaled Unscented Kalman filter (UKF) as defined by Simon Julier in [1], using the formulation
- * provided by Wan and Merle in [2]. This filter scales the sigma points to avoid strong nonlinearities.
+ * Implements Unscented Transform that is more robust to non-linearities than linear approximation used in ExtendedKalmanFilters.
+ * Given current state, covariance and transform_function; Calculate new state and covariance.
  *
  * @tparam T numeric type, usually double or float
  * @tparam n state dimensions size.
@@ -195,8 +195,18 @@ class UnscentedTransform {
     };
 };
 
-template <class T, size_t dim_x, size_t dim_z, size_t dim_u, size_t n_sigma_pt>
+/**
+ * Implements the Scaled Unscented Kalman filter (UKF) as defined by Simon Julier in [1], using the formulation
+ * provided by Wan and Merle in [2]. This filter scales the sigma points to avoid strong nonlinearities.
+ *
+ * @tparam T numeric type, usually double or float
+ * @tparam dim_x state dimensions size.
+ * @tparam dim_z measurement dimension size.
+ * @tparam dim_u control dimension size.
+ */
+template <class T, size_t dim_x, size_t dim_z, size_t dim_u>
 class UnscentedKalmanFilter {
+    // Static types handles
     typedef Eigen::Matrix<T, dim_x, 1>  state_matrix_size_t;
     typedef Eigen::Matrix<T, dim_x, dim_x>  state_square_size_t;
     typedef Eigen::Matrix<T, dim_x, 1>  measurement_matrix_t;
@@ -210,7 +220,6 @@ class UnscentedKalmanFilter {
         UnscentedKalmanFilter::state_square_size_t             _I_KH;
         UnscentedKalmanFilter::state_square_size_t             _H   ;
 
-
     public:
         UnscentedKalmanFilter::state_matrix_size_t       x;            // state
         UnscentedKalmanFilter::state_matrix_size_t       U;            // control vector
@@ -220,14 +229,13 @@ class UnscentedKalmanFilter {
         UnscentedKalmanFilter::state_square_size_t       Q;            // process uncertainty
         UnscentedKalmanFilter::measurement_matrix_t      y;            // residual
         UnscentedKalmanFilter::measurement_square_size_t S;            // measurement covariance
-        Eigen::Matrix<T, dim_x, dim_u>                  B;            // control transition matrix
+        Eigen::Matrix<T, dim_x, dim_u>                   B;            // control transition matrix
 
-
-        state_matrix_size_t stateTransforms[n_sigma_pt];
-
+        // state_matrix_size_t stateTransforms[n_sigma_pt];
 
         UnscentedKalmanFilter() {
             // Public variable nulling
+            // TODO: Can Eigen provide allocation with zeros?
             x.setZero();                    // state
             P.setIdentity();                // state uncertainty covariance
             U.setZero();                    // control vector
@@ -242,7 +250,7 @@ class UnscentedKalmanFilter {
             y.setZero();                    // residual
 
 
-            // Private memory allocation
+            // Private variable nulling
             _I   .setIdentity();          // identity
             _PHT .setZero();              // Allocate memory for intermediate values
             _K   .setZero();              // Allocate memory for intermediate values
