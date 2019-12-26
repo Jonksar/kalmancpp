@@ -2,7 +2,7 @@
  * --------------------------------------------------
  * File Name : UnscentedKalmanFilter.hpp
  * Creation Date : 2019-10-26 Sat 06:40 am
- * Last Modified : 2019-12-26 Thu 08:59 pm
+ * Last Modified : 2019-12-26 Thu 11:59 pm
  * Created By : Joonatan Samuel
  * --------------------------------------------------
  */
@@ -37,12 +37,11 @@ class MerweScaledSigmaPoints {
          * @param[in] beta  [T numeric] Incorporates prior knowledge of the distribution of the mean. For Gaussian x beta=2 is optimal, according to [3].
          * @param[in] kappa [T numeric, default=0.0] Secondary scaling parameter usually set to 0 according to [4], or to 3-n according to [5].
          */
-        MerweScaledSigmaPoints(T alpha=0.01, T beta=2, T kappa=0) : alpha(alpha), beta(beta), kappa(kappa) {
+        MerweScaledSigmaPoints(T alpha=0.1, T beta=2, T kappa=0) : alpha(alpha), beta(beta), kappa(kappa) {
             compute_weights();
         };
 
-        ~MerweScaledSigmaPoints() {
-        };
+        ~MerweScaledSigmaPoints() {};
 
         /** Computes the weights for the scaled unscented Kalman filter.
          */
@@ -50,7 +49,6 @@ class MerweScaledSigmaPoints {
             T lambda_ = std::pow(alpha, 2) * (T(n)+kappa) - T(n);
 
             T c = .5 / (T(n) + lambda_);
-            // std::cout << "MerweScaledSigmaPoints.compute_weights: " << c << " " << lambda_ << std::endl;
             Wc[0] = lambda_ / (T(n) + lambda_) + (1 - std::pow(alpha, 2) + beta);
             Wm[0] = lambda_ / (T(n) + lambda_);
 
@@ -59,7 +57,6 @@ class MerweScaledSigmaPoints {
                 Wm[i] = c;
             }
 
-            // std::cout << "MerweScaledSigmaPoints weights computed" << std::endl;
             return;
         };
 
@@ -98,15 +95,31 @@ class MerweScaledSigmaPoints {
  * @tparam T numeric type, usually double or float
  * @tparam n number of dimensions sigma points are sampled from
  */
-template <class T, size_t n>
+template <class T, int n>
 std::ostream & operator << (std::ostream &out, const MerweScaledSigmaPoints<T, n>& c)
 {
-    return out <<
+    out <<
         "MerweScaledSigmaPoints(" <<
         "n="     <<  n << ", " <<
         "alpha=" <<  c.alpha << ", " <<
         "beta="  <<  c.beta << ", " <<
         "kappa=" <<  c.kappa << ")" << std::endl;
+
+    out << "Wc = [";
+    for (int i = 0; i < 2*n+1; ++i) {
+        out << c.Wc[i] << ", ";
+    }
+    out << "]";
+    out << std::endl;
+
+
+    out << "Wm = [";
+    for (int i = 0; i < 2*n+1; ++i) {
+        out << c.Wm[i] << ", ";
+    }
+    out << "]";
+    out << std::endl;
+
     return out;
 };
 
@@ -141,14 +154,14 @@ class UnscentedTransform {
      *
      * @param[in] x state
      * @param[in] P covariance of state
-     * @param[in] Hx Transform of x
-     * @param[in] function parameters of Hx, usually time delta will get passed here
+     * @param[in] fx Transform of x
+     * @param[in] function parameters of fx, usually time delta will get passed here
      *
      * @return UnscentedTransform::Result that holds mean and covariance.
      */
     UnscentedTransform::Result unscented_transform(state_matrix_size_t x,
             state_square_size_t P,
-            transform_func_t Hx,
+            transform_func_t fx,
             argTs... fargs)
     {
         // Initialize result
@@ -161,13 +174,11 @@ class UnscentedTransform {
         // TODO: Make static
         state_matrix_size_t transformed[sigma_point_generator.num_sigmas()];
 
-        // Pass each state through transform of Hx
+        // Pass each state through transform of fx
         for (size_t i = 0; i < sigma_point_generator.num_sigmas(); i++)
         {
             auto pt  = pts[i];
-            std::cout << "i: " << i << std::endl << pt << std::endl;
-            transformed[i] = Hx(pt, fargs...);
-            std::cout << "i_t: " << i << std::endl << transformed[i] << std::endl;
+            transformed[i] = fx(pt, fargs...);
         };
 
         // 1. Calculate the mean,
@@ -186,9 +197,6 @@ class UnscentedTransform {
             // P += Wc[k] * np.outer(y, y)
             auto y = transformed[i] - result.mean;
             result.covariance += (y * y.transpose()) * sigma_point_generator.Wc[i];
-
-            std::cout << "result.covariance" << std::endl;
-            std::cout << result.covariance << std::endl;
         };
 
         return result;
@@ -204,7 +212,7 @@ class UnscentedTransform {
  * @tparam dim_z measurement dimension size.
  * @tparam dim_u control dimension size.
  */
-template <class T, size_t dim_x, size_t dim_z, size_t dim_u>
+template <class T, size_t dim_x, size_t dim_z, size_t dim_u, class ... argTs>
 class UnscentedKalmanFilter {
     // Static types handles
     typedef Eigen::Matrix<T, dim_x, 1>  state_matrix_size_t;
@@ -213,22 +221,30 @@ class UnscentedKalmanFilter {
     typedef Eigen::Matrix<T, dim_z, dim_z>  measurement_square_size_t;
     typedef Eigen::Matrix<T, dim_x, dim_z>  state_to_measurement_size_t;
 
+    // Function updating state + arguments -> new state
+    typedef std::function< state_matrix_size_t(const state_matrix_size_t& x, argTs...)> transform_func_t;
+
+    // Function converting state -> measurement space
+    typedef std::function< measurement_matrix_t(const state_matrix_size_t& x)> measurement_func_t;
     private:
-        UnscentedKalmanFilter::state_square_size_t             _I   ;
+        UnscentedKalmanFilter::state_square_size_t             _I   ;  // Identity
         UnscentedKalmanFilter::state_to_measurement_size_t     _PHT ;
-        UnscentedKalmanFilter::state_to_measurement_size_t     _K   ;
+        UnscentedKalmanFilter::state_to_measurement_size_t     _K   ;  // Kalman gain
         UnscentedKalmanFilter::state_square_size_t             _I_KH;
         UnscentedKalmanFilter::state_square_size_t             _H   ;
+        UnscentedKalmanFilter::measurement_matrix_t            _y   ;  // difference in measurement space
 
     public:
+        UnscentedTransform<T, dim_x> UT_state;
+        UnscentedTransform<T, dim_z> UT_measurement;
+
         UnscentedKalmanFilter::state_matrix_size_t       x;            // state
-        UnscentedKalmanFilter::state_matrix_size_t       U;            // control vector
-        UnscentedKalmanFilter::state_square_size_t       P;            // uncertainty covariance
+        UnscentedKalmanFilter::state_square_size_t       P;            // state uncertainty covariance
         UnscentedKalmanFilter::state_square_size_t       F;            // state transition matrix
-        UnscentedKalmanFilter::measurement_square_size_t R;            // state uncertainty
-        UnscentedKalmanFilter::state_square_size_t       Q;            // process uncertainty
-        UnscentedKalmanFilter::measurement_matrix_t      y;            // residual
+        UnscentedKalmanFilter::state_square_size_t       Q;            // state process uncertainty
+        UnscentedKalmanFilter::measurement_square_size_t R;            // measurement uncertainty
         UnscentedKalmanFilter::measurement_square_size_t S;            // measurement covariance
+        UnscentedKalmanFilter::state_matrix_size_t       U;            // control vector
         Eigen::Matrix<T, dim_x, dim_u>                   B;            // control transition matrix
 
         // state_matrix_size_t stateTransforms[n_sigma_pt];
@@ -259,4 +275,14 @@ class UnscentedKalmanFilter {
         };
 
         ~UnscentedKalmanFilter() {};
+
+    void predict(transform_func_t fx, argTs... fargs) {
+        auto result = UT_state.unscented_transform(x, P, fx, fargs...);
+
+        x = result.mean + U;
+        P = result.covariance + Q;
+
+        U.setZero();
+    };
+
 };
