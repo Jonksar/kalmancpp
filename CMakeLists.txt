@@ -21,8 +21,7 @@ target_link_libraries(extended_kalman_filter
 )
 
 add_executable(demo src/demo.cpp)
-
-# add_executable(main src/main.cpp)
+add_executable(tests src/tests.cpp)
 
 target_link_libraries(demo
     extended_kalman_filter
@@ -30,4 +29,8 @@ target_link_libraries(demo
     ${Boost_LIBRARIES}
 )
 
-
+target_link_libraries(tests
+    extended_kalman_filter
+    ${EIGEN_LIBRARIES}
+    ${Boost_LIBRARIES}
+)
