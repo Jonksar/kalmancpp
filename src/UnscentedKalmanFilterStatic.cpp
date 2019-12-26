@@ -2,7 +2,7 @@
  * --------------------------------------------------
  * File Name : UnscentedKalmanFilter.hpp
  * Creation Date : 2019-10-26 Sat 06:40 am
- * Last Modified : 2019-12-26 Thu 08:37 pm
+ * Last Modified : 2019-12-26 Thu 08:51 pm
  * Created By : Joonatan Samuel
  * --------------------------------------------------
  */
@@ -29,6 +29,7 @@ class MerweScaledSigmaPoints {
         T Wc[2*n+1];
         T Wm[2*n+1];
         state_matrix_size_t sigma_points_array[2*n+1];
+
         /**
          * Initialization function that by that will compute weights for sigma points
          *
@@ -90,6 +91,34 @@ class MerweScaledSigmaPoints {
         };
 };
 
+
+/**
+ * Printing operator for MerweScaledSigmaPoints
+ *
+ * @tparam T numeric type, usually double or float
+ * @tparam n number of dimensions sigma points are sampled from
+ */
+template <class T, size_t n>
+std::ostream & operator << (std::ostream &out, const MerweScaledSigmaPoints<T, n>& c)
+{
+    return out <<
+        "MerweScaledSigmaPoints(" <<
+        "n="     <<  n << ", " <<
+        "alpha=" <<  c.alpha << ", " <<
+        "beta="  <<  c.beta << ", " <<
+        "kappa=" <<  c.kappa << ")" << std::endl;
+    return out;
+};
+
+
+/**
+ * Implements the Scaled Unscented Kalman filter (UKF) as defined by Simon Julier in [1], using the formulation
+ * provided by Wan and Merle in [2]. This filter scales the sigma points to avoid strong nonlinearities.
+ *
+ * @tparam T numeric type, usually double or float
+ * @tparam n state dimensions size.
+ * @tparam argTs arguments for update functions, usually time dimension will get passed here.
+ */
 template <class T, int n, class ... argTs>
 class UnscentedTransform {
     public:
@@ -106,6 +135,17 @@ class UnscentedTransform {
     UnscentedTransform() {};
     ~UnscentedTransform() {};
 
+    /**
+     * Main working function of the class.
+     * Given current state, covariance and transform_function; Calculate new state and covariance.
+     *
+     * @param[in] x state
+     * @param[in] P covariance of state
+     * @param[in] Hx Transform of x
+     * @param[in] function parameters of Hx, usually time delta will get passed here
+     *
+     * @return UnscentedTransform::Result that holds mean and covariance.
+     */
     UnscentedTransform::Result unscented_transform(state_matrix_size_t x,
             state_square_size_t P,
             transform_func_t Hx,
@@ -117,7 +157,8 @@ class UnscentedTransform {
         // Sigma points before transform
         auto pts = sigma_point_generator.sigma_points(x, P);
 
-        // Dynamic memory for points after transform
+        // Memory alloc for points after transform
+        // TODO: Make static
         state_matrix_size_t transformed[sigma_point_generator.num_sigmas()];
 
         // Pass each state through transform of Hx
@@ -129,14 +170,16 @@ class UnscentedTransform {
             std::cout << "i_t: " << i << std::endl << transformed[i] << std::endl;
         };
 
-        // 1. Calculate the mean
+        // 1. Calculate the mean,
+        //               as the weighted sum of evolved states.
         result.mean.setZero();
         for (size_t i = 0; i < sigma_point_generator.num_sigmas(); i++)
         {
             result.mean += sigma_point_generator.Wm[i] * transformed[i];
         };
 
-        // 2. Calculate the covariance
+        // 2. Calculate the covariance,
+        //              as the weighted covariance of the points vs the mean
         result.covariance.setZero();
         for (size_t i = 0; i < sigma_point_generator.num_sigmas(); i++)
         {
@@ -150,18 +193,6 @@ class UnscentedTransform {
 
         return result;
     };
-};
-
-template <class T, size_t n>
-std::ostream & operator << (std::ostream &out, const MerweScaledSigmaPoints<T, n>& c)
-{
-    return out <<
-        "MerweScaledSigmaPoints(" <<
-        "n="     <<  n << ", " <<
-        "alpha=" <<  c.alpha << ", " <<
-        "beta="  <<  c.beta << ", " <<
-        "kappa=" <<  c.kappa << ")" << std::endl;
-    return out;
 };
 
 template <class T, size_t dim_x, size_t dim_z, size_t dim_u, size_t n_sigma_pt>
