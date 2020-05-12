@@ -2,7 +2,7 @@
  * --------------------------------------------------
  * File Name : UnscentedKalmanFilter.hpp
  * Creation Date : 2019-10-26 Sat 06:40 am
- * Last Modified : 2019-12-26 Thu 11:59 pm
+ * Last Modified : 2020-05-12 Tue 11:49 AM
  * Created By : Joonatan Samuel
  * --------------------------------------------------
  */
@@ -263,10 +263,10 @@ class UnscentedKalmanFilter {
 
             S.setIdentity();                // measurement covariance
 
-            y.setZero();                    // residual
 
 
             // Private variable nulling
+            _y.setZero();                 // residual
             _I   .setIdentity();          // identity
             _PHT .setZero();              // Allocate memory for intermediate values
             _K   .setZero();              // Allocate memory for intermediate values
